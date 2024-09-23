@@ -9,7 +9,7 @@
 
 	let prompts = [];
 
-	$: prompts = suggestionPrompts
+	$: prompts = (suggestionPrompts ?? [])
 		.reduce((acc, current) => [...acc, ...[current]], [])
 		.sort(() => Math.random() - 0.5);
 	// suggestionPrompts.length <= 4
@@ -62,7 +62,7 @@
 							<div class="text-sm text-gray-600 font-normal line-clamp-2">{prompt.title[1]}</div>
 						{:else}
 							<div
-								class=" self-center text-sm font-medium dark:text-gray-300 dark:group-hover:text-gray-100 transition line-clamp-2"
+								class="  text-sm font-medium dark:text-gray-300 dark:group-hover:text-gray-100 transition line-clamp-2"
 							>
 								{prompt.content}
 							</div>

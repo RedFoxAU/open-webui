@@ -1,17 +1,28 @@
 <script lang="ts">
-	import Spinner from '$lib/components/common/Spinner.svelte';
-	import { copyToClipboard } from '$lib/utils';
 	import hljs from 'highlight.js';
-	import 'highlight.js/styles/github-dark.min.css';
 	import { loadPyodide } from 'pyodide';
-	import { tick } from 'svelte';
+	import mermaid from 'mermaid';
+
+	import { v4 as uuidv4 } from 'uuid';
+
+	import { getContext, getAllContexts, onMount } from 'svelte';
+	import { copyToClipboard } from '$lib/utils';
+
+	import 'highlight.js/styles/github-dark.min.css';
+
 	import PyodideWorker from '$lib/workers/pyodide.worker?worker';
+
+	const i18n = getContext('i18n');
 
 	export let id = '';
 
+	export let token;
 	export let lang = '';
 	export let code = '';
 
+	let mermaidHtml = null;
+
+	let highlightedCode = null;
 	let executing = false;
 
 	let stdout = null;
@@ -202,18 +213,69 @@ __builtins__.input = input`);
 		};
 	};
 
-	$: highlightedCode = code ? hljs.highlightAuto(code, hljs.getLanguage(lang)?.aliases).value : '';
+	let debounceTimeout;
+
+	const drawMermaidDiagram = async () => {
+		try {
+			if (await mermaid.parse(code)) {
+				const { svg } = await mermaid.render(`mermaid-${uuidv4()}`, code);
+				mermaidHtml = svg;
+			}
+		} catch (error) {
+			console.log('Error:', error);
+		}
+	};
+
+	$: if (token.raw) {
+		if (lang === 'mermaid' && (token?.raw ?? '').slice(-4).includes('```')) {
+			(async () => {
+				await drawMermaidDiagram();
+			})();
+		} else {
+			// Function to perform the code highlighting
+			const highlightCode = () => {
+				highlightedCode = hljs.highlightAuto(code, hljs.getLanguage(lang)?.aliases).value || code;
+			};
+
+			// Clear the previous timeout if it exists
+			clearTimeout(debounceTimeout);
+			// Set a new timeout to debounce the code highlighting
+			debounceTimeout = setTimeout(highlightCode, 10);
+		}
+	}
+
+	onMount(async () => {
+		if (document.documentElement.classList.contains('dark')) {
+			mermaid.initialize({
+				startOnLoad: true,
+				theme: 'dark',
+				securityLevel: 'loose'
+			});
+		} else {
+			mermaid.initialize({
+				startOnLoad: true,
+				theme: 'default',
+				securityLevel: 'loose'
+			});
+		}
+	});
 </script>
 
-{#if code}
-	<div class="mb-4" dir="ltr">
+<div class="my-2" dir="ltr">
+	{#if lang === 'mermaid'}
+		{#if mermaidHtml}
+			{@html `${mermaidHtml}`}
+		{:else}
+			<pre class="mermaid">{code}</pre>
+		{/if}
+	{:else}
 		<div
 			class="flex justify-between bg-[#202123] text-white text-xs px-4 pt-1 pb-0.5 rounded-t-lg overflow-x-auto"
 		>
-			<div class="p-1">{@html lang}</div>
+			<div class="p-1">{lang}</div>
 
 			<div class="flex items-center">
-				{#if lang === 'python' || (lang === '' && checkPythonCode(code))}
+				{#if lang.toLowerCase() === 'python' || lang.toLowerCase() === 'py' || (lang === '' && checkPythonCode(code))}
 					{#if executing}
 						<div class="copy-code-button bg-none border-none p-1 cursor-not-allowed">Running</div>
 					{:else}
@@ -221,12 +283,12 @@ __builtins__.input = input`);
 							class="copy-code-button bg-none border-none p-1"
 							on:click={() => {
 								executePython(code);
-							}}>Run</button
+							}}>{$i18n.t('Run')}</button
 						>
 					{/if}
 				{/if}
 				<button class="copy-code-button bg-none border-none p-1" on:click={copyCode}
-					>{copied ? 'Copied' : 'Copy Code'}</button
+					>{copied ? $i18n.t('Copied') : $i18n.t('Copy Code')}</button
 				>
 			</div>
 		</div>
@@ -238,7 +300,8 @@ __builtins__.input = input`);
 				stderr ||
 				result) &&
 				'border-bottom-left-radius: 0px; border-bottom-right-radius: 0px;'}"><code
-				class="language-{lang} rounded-t-none whitespace-pre">{@html highlightedCode || code}</code
+				class="language-{lang} rounded-t-none whitespace-pre"
+				>{#if highlightedCode}{@html highlightedCode}{:else}{code}{/if}</code
 			></pre>
 
 		<div
@@ -257,5 +320,5 @@ __builtins__.input = input`);
 				<div class="text-sm">{stdout || stderr || result}</div>
 			</div>
 		{/if}
-	</div>
-{/if}
+	{/if}
+</div>

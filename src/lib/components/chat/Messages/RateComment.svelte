@@ -46,8 +46,8 @@
 	}
 
 	onMount(() => {
-		selectedReason = message.annotation.reason;
-		comment = message.annotation.comment;
+		selectedReason = message?.annotation?.reason ?? '';
+		comment = message?.annotation?.comment ?? '';
 		loadReasons();
 	});
 
@@ -57,7 +57,10 @@
 		message.annotation.reason = selectedReason;
 		message.annotation.comment = comment;
 
-		dispatch('submit');
+		dispatch('submit', {
+			reason: selectedReason,
+			comment: comment
+		});
 
 		toast.success($i18n.t('Thanks for your feedback!'));
 		show = false;
